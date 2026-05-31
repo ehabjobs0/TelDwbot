@@ -4,7 +4,16 @@
     "alts": ["BINANCE:LINKUSDT", "BINANCE:AVAXUSDT", "BINANCE:SUIUSDT"],
     "macro": ["CRYPTOCAP:TOTAL", "CRYPTOCAP:TOTAL3", "CRYPTOCAP:BTC.D"]
   },
-  "timeframes_to_check": ["1W", "1D", "4H"],
+  "timeframes_to_check": ["1m", "5m", "15m", "30m", "1H", "4H", "1D"],
+  "timeframe_codes_for_mcp": {
+    "1m": "1", "5m": "5", "15m": "15", "30m": "30", "1H": "60", "4H": "240", "1D": "1D"
+  },
+  "multi_timeframe_logic": {
+    "trend_frames": ["1D", "4H"],
+    "structure_frames": ["1H", "30m", "15m"],
+    "entry_timing_frames": ["5m", "1m"],
+    "rule": "Direction (long/short) is set by trend_frames. Refine the level on structure_frames. Time the entry on entry_timing_frames. If 1D and 4H disagree, treat as NEUTRAL / stand aside. Lower frames (1m/5m) are noise for bias — use them ONLY for entry timing, never to flip the trend."
+  },
   "bias_criteria": {
     "bullish": "Price above 50D EMA, RSI on daily between 45 and 70, higher highs and higher lows on 4H",
     "bearish": "Price below 50D EMA, RSI on daily below 45, lower highs and lower lows on 4H",
@@ -15,7 +24,20 @@
     "min_rr_ratio": 2,
     "no_trades_during": ["major US CPI", "FOMC", "weekend thin liquidity"]
   },
-  "indicators_i_care_about": ["RSI (14)", "MACD (12, 26, 9)", "50 EMA", "200 EMA", "Volume"],
+  "indicators_i_care_about": ["RSI (14)", "MACD (12, 26, 9)", "50 EMA", "200 EMA", "Volume", "Ichimoku Cloud (9, 26, 52, 26)", "Volume Profile / Fixed Range (POC, VAH, VAL)", "Stochastic RSI (3, 3, 14, 14)"],
+
+  "liquidation_and_orderbook": {
+    "what_i_want": "Read the liquidation heatmap / order-book heatmap to help decide long vs short.",
+    "trdr_io_status": "trdr.io has NO public developer API (api subdomain does not exist, site is bot-blocked 403, docs mention no API/key/webhook). It cannot be queried programmatically.",
+    "the_workaround": "TRDR is 'powered by TradingView' — its Liquidations and 'Order Book Top Levels' heatmap are TradingView indicators. Add them to the chart on TradingView Desktop, then the MCP reads their plotted output.",
+    "how_mcp_reads_it": [
+      "data_get_pine_lines with study_filter for the liquidation indicator -> horizontal liquidation price levels",
+      "data_get_pine_boxes -> liquidation zones as {high, low}",
+      "data_get_pine_labels -> annotated cluster sizes",
+      "data_get_study_values -> Volume Profile POC / VAH / VAL"
+    ],
+    "decision_use": "Big liquidation cluster ABOVE price = magnet/likely sweep up (favors short-squeeze / fade or long into it). Big cluster BELOW price = downside liquidity (favors long-squeeze / stop-run lower). Confirm direction with multi_timeframe_logic before committing."
+  },
 
   "leverage_rules": {
     "default_leverage": 3,
@@ -59,8 +81,9 @@
 
   "analysis_workflow_per_symbol": [
     "1. chart_set_symbol to the target coin, then chart_get_state to read symbol + visible indicators.",
-    "2. Check 1W, 1D, 4H. Read 50 EMA / 200 EMA, RSI(14), MACD, Volume via data_get_study_values.",
-    "3. Decide bias using bias_criteria -> LONG if bullish, SHORT if bearish, STAND ASIDE if neutral.",
+    "2. Walk timeframes_to_check (1m,5m,15m,30m,1H,4H,1D) using timeframe_codes_for_mcp. Read 50/200 EMA, RSI(14), MACD, Volume, Ichimoku (price vs cloud, TK cross), Volume Profile (POC/VAH/VAL), Stoch RSI via data_get_study_values.",
+    "2b. Read liquidation/order-book levels per liquidation_and_orderbook.how_mcp_reads_it (if those indicators are on the chart).",
+    "3. Decide bias with multi_timeframe_logic (1D+4H set direction) and bias_criteria -> LONG / SHORT / STAND ASIDE. Use liquidation clusters + POC as confluence, lower frames only for entry timing.",
     "4. Read entry (cost) = quote_get last price.",
     "5. Set stop_loss per leverage_rules.stop_loss_for_3x (structure-based, <=10% adverse).",
     "6. Compute liquidation_price with default_leverage = 3.",

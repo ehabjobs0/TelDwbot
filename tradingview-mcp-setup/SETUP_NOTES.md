@@ -56,6 +56,18 @@ Or, once the MCP is connected, just call the `tv_launch` tool (auto-detects the 
 
 Call `tv_health_check`. You want `cdp_connected: true`. Then `quote_get` BTCUSDT for a live price.
 
+## trdr.io — no public API (checked)
+
+`trdr.io` does **not** expose a public developer API: the `api.trdr.io` host doesn't
+resolve, the site is bot-blocked (HTTP 403), and the docs mention no API key / REST
+endpoint / webhook. So it can't be queried programmatically.
+
+Workaround: TRDR is "powered by TradingView" — its **Liquidations** and **Order Book
+Top Levels** heatmap are TradingView indicators. Add them to the chart on TradingView
+Desktop and the MCP reads their plotted output via `data_get_pine_lines` /
+`data_get_pine_boxes` / `data_get_pine_labels`. See `liquidation_and_orderbook` in
+`rules.json`.
+
 ## What `rules.json` does
 
 Beyond the watchlist/bias/risk config, it encodes the trade-decision logic you asked for —
