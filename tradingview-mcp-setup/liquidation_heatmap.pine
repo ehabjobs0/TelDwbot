@@ -1,6 +1,6 @@
 //@version=5
 // =============================================================================
-//  Estimated Liquidation Heatmap (ZONES)  —  free TRDR/Coinglass alternative
+//  Estimated Liquidation Heatmap (ZONES + ALERTS)  — free TRDR/Coinglass alt
 // -----------------------------------------------------------------------------
 //  HOW IT WORKS (read this):
 //  Pine Script has NO access to real exchange order books or open interest, so a
@@ -11,6 +11,10 @@
 //  Zones are semi-transparent and volume-weighted, so where many zones OVERLAP the
 //  area gets darker/hotter — just like a real liquidation heatmap.
 //  A "magnet" table shows the nearest cluster above/below price + a bias hint.
+//
+//  ALERTS: fires when price ENTERS a zone, or APPROACHES a large liq cluster.
+//  To use: add the indicator, then create an alert with condition
+//          "LIQ Heatmap" -> "Any alert() function call".
 //
 //  Output is designed to be READ BY THE tradingview-mcp:
 //    * box.new    -> data_get_pine_boxes  (liquidation zones as {high, low})
@@ -46,6 +50,13 @@ shortCol   = input.color(color.red,  "Short-liq color (above price)", group=gV)
 // ---------- Inputs: magnet table ----------
 gT        = "Magnet table"
 showTable = input.bool(true, "Show nearest-cluster table", group=gT)
+
+// ---------- Inputs: alerts ----------
+gA           = "Alerts"
+alertsOn     = input.bool(true,  "Enable alerts", group=gA)
+proximityPct = input.float(0.5,  "Alert when price within (%) of cluster", minval=0.05, step=0.05, group=gA)
+clusterBand  = input.float(0.4,  "Cluster band (%) — group overlapping zones", minval=0.05, step=0.05, group=gA)
+minCluster   = input.int(2,      "Min zones in cluster to alert", minval=1, group=gA)
 
 // ---------- State arrays (parallel) ----------
 var box[]   bxs    = array.new_box()
@@ -99,35 +110,64 @@ if not na(pl)
         liq = pl * (1 - 1.0 / L + mmr)
         addZone(liq, -1, longCol, "LONG", L)
 
-// ---------- Nearest-cluster magnet table ----------
+// ---------- Shared nearest-cluster metrics (used by table + alerts) ----------
+float nAbove   = na
+float nBelow   = na
+int   cAbove   = 0
+int   cBelow   = 0
+int   strAbove = 0
+int   strBelow = 0
+bool  insideZone = false
+int   n = array.size(prices)
+needMetrics = showTable or alertsOn
+if needMetrics and n > 0
+    // pass 1: nearest above/below + counts + inside-zone test
+    for i = 0 to n - 1
+        float p = array.get(prices, i)
+        float half = p * (zonePct / 100.0) / 2.0
+        if math.abs(close - p) <= half
+            insideZone := true
+        if p > close
+            cAbove += 1
+            if na(nAbove) or p < nAbove
+                nAbove := p
+        else if p < close
+            cBelow += 1
+            if na(nBelow) or p > nBelow
+                nBelow := p
+    // pass 2: how many zones cluster around the nearest level (strength)
+    for i = 0 to n - 1
+        float p = array.get(prices, i)
+        if not na(nAbove) and math.abs(p - nAbove) / nAbove * 100.0 <= clusterBand
+            strAbove += 1
+        if not na(nBelow) and math.abs(p - nBelow) / nBelow * 100.0 <= clusterBand
+            strBelow += 1
+
+// ---------- Magnet table ----------
 var table t = na
 if showTable and barstate.islast
     if na(t)
         t := table.new(position.top_right, 2, 5, border_width=1, frame_color=color.gray, frame_width=1)
-    float nAbove = na
-    float nBelow = na
-    int   cAbove = 0
-    int   cBelow = 0
-    int n = array.size(prices)
-    if n > 0
-        for i = 0 to n - 1
-            float p = array.get(prices, i)
-            if p > close
-                cAbove += 1
-                if na(nAbove) or p < nAbove
-                    nAbove := p
-            else if p < close
-                cBelow += 1
-                if na(nBelow) or p > nBelow
-                    nBelow := p
     string hint = cBelow > cAbove ? "Heavier BELOW: downside liquidity (long-squeeze / sweep low)" : cAbove > cBelow ? "Heavier ABOVE: upside liquidity (short-squeeze / sweep high)" : "Balanced"
     table.cell(t, 0, 0, "LIQ MAGNET", text_color=color.white, bgcolor=color.new(color.blue, 0), text_size=size.small)
     table.cell(t, 1, 0, "", bgcolor=color.new(color.blue, 0))
     table.cell(t, 0, 1, "Nearest ABOVE", text_color=color.white, text_size=size.small)
-    table.cell(t, 1, 1, na(nAbove) ? "-" : str.tostring(nAbove, format.mintick), text_color=color.red, text_size=size.small)
+    table.cell(t, 1, 1, na(nAbove) ? "-" : str.tostring(nAbove, format.mintick) + "  (" + str.tostring(strAbove) + ")", text_color=color.red, text_size=size.small)
     table.cell(t, 0, 2, "Nearest BELOW", text_color=color.white, text_size=size.small)
-    table.cell(t, 1, 2, na(nBelow) ? "-" : str.tostring(nBelow, format.mintick), text_color=color.lime, text_size=size.small)
+    table.cell(t, 1, 2, na(nBelow) ? "-" : str.tostring(nBelow, format.mintick) + "  (" + str.tostring(strBelow) + ")", text_color=color.lime, text_size=size.small)
     table.cell(t, 0, 3, "Zones above/below", text_color=color.white, text_size=size.small)
     table.cell(t, 1, 3, str.tostring(cAbove) + " / " + str.tostring(cBelow), text_color=color.white, text_size=size.small)
     table.cell(t, 0, 4, "Bias hint", text_color=color.white, text_size=size.small)
     table.cell(t, 1, 4, hint, text_color=color.yellow, text_size=size.small)
+
+// ---------- Alerts ----------
+if alertsOn and barstate.isconfirmed
+    float distAbove = na(nAbove) ? na : (nAbove - close) / close * 100.0
+    float distBelow = na(nBelow) ? na : (close - nBelow) / close * 100.0
+    if insideZone
+        alert("LIQ HEATMAP: price INSIDE a liquidation zone @ " + str.tostring(close, format.mintick) + " (" + syminfo.ticker + " " + timeframe.period + ")", alert.freq_once_per_bar)
+    else
+        if not na(distAbove) and distAbove <= proximityPct and strAbove >= minCluster
+            alert("LIQ HEATMAP: approaching SHORT-liq cluster ABOVE @ " + str.tostring(nAbove, format.mintick) + " (" + str.tostring(strAbove) + " zones). Possible sweep up / short squeeze. " + syminfo.ticker + " " + timeframe.period, alert.freq_once_per_bar)
+        if not na(distBelow) and distBelow <= proximityPct and strBelow >= minCluster
+            alert("LIQ HEATMAP: approaching LONG-liq cluster BELOW @ " + str.tostring(nBelow, format.mintick) + " (" + str.tostring(strBelow) + " zones). Possible sweep low / long squeeze. " + syminfo.ticker + " " + timeframe.period, alert.freq_once_per_bar)

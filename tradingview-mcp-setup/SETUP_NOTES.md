@@ -91,6 +91,13 @@ The MCP reads it with `data_get_pine_boxes` (the zones) / `data_get_pine_labels`
 Tuning: `Zone thickness (%)` sets how fat each zone is; raise `Max zones kept` for a
 denser heatmap; `Swing strength` controls how many swings generate zones.
 
+**Alerts:** the script fires when price *enters* a liquidation zone or *approaches* a
+large cluster (above or below). To turn them on:
+1. Make sure `Enable alerts` is on (it is by default). Tune `Alert when price within (%)`,
+   `Cluster band (%)`, and `Min zones in cluster`.
+2. TradingView → Alerts → Create Alert → Condition = **"LIQ Heatmap" → "Any alert() function call"** → Create.
+3. Alert messages include the level, cluster size, side (short/long squeeze), symbol & timeframe.
+
 ## What `rules.json` does
 
 Beyond the watchlist/bias/risk config, it encodes the trade-decision logic you asked for —
