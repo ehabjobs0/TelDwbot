@@ -72,10 +72,14 @@ Desktop and the MCP reads their plotted output via `data_get_pine_lines` /
 
 Since trdr.io has no API, this repo ships `liquidation_heatmap.pine` — an **estimated**
 liquidation heatmap (no API needed). It draws **colored zones (boxes)** where leveraged
-longs/shorts likely get liquidated, based on swing highs/lows + volume + leverage tiers
-(10/25/50/100x). The zones are semi-transparent, so where many **overlap they stack and
-darken** — a real heatmap look. It also prints a "magnet" table with the nearest cluster
-above/below price.
+longs/shorts likely get liquidated, based on swing highs/lows + leverage tiers
+(10/25/50/100x). **Nearby liquidation levels are merged** into one cleaner zone: the more
+levels stacked, the **fatter and hotter (darker)** the zone, tagged `xN` (N = how many
+levels merged = wall strength). It also prints a "magnet" table with the nearest cluster
+above/below price and the total liq weight on each side.
+
+Merge controls: `Merge nearby zones` (on/off), `Merge band (%)` (how close counts as one
+cluster, default 0.30%), `Min zone thickness (%)`. Turn merge off to see every raw level.
 
 **Important:** it's an *estimate* from price/volume, not real exchange liquidation data
 (Pine can't access order books or open interest). It's a close visual proxy for
