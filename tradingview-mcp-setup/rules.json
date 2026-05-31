@@ -1,0 +1,83 @@
+{
+  "watchlist": {
+    "majors": ["BINANCE:BTCUSDT", "BINANCE:ETHUSDT", "BINANCE:SOLUSDT"],
+    "alts": ["BINANCE:LINKUSDT", "BINANCE:AVAXUSDT", "BINANCE:SUIUSDT"],
+    "macro": ["CRYPTOCAP:TOTAL", "CRYPTOCAP:TOTAL3", "CRYPTOCAP:BTC.D"]
+  },
+  "timeframes_to_check": ["1W", "1D", "4H"],
+  "bias_criteria": {
+    "bullish": "Price above 50D EMA, RSI on daily between 45 and 70, higher highs and higher lows on 4H",
+    "bearish": "Price below 50D EMA, RSI on daily below 45, lower highs and lower lows on 4H",
+    "neutral": "Price chopping around 50D EMA, RSI between 40 and 60, no clear structure"
+  },
+  "risk_rules": {
+    "max_risk_per_trade": "1% of portfolio",
+    "min_rr_ratio": 2,
+    "no_trades_during": ["major US CPI", "FOMC", "weekend thin liquidity"]
+  },
+  "indicators_i_care_about": ["RSI (14)", "MACD (12, 26, 9)", "50 EMA", "200 EMA", "Volume"],
+
+  "leverage_rules": {
+    "default_leverage": 3,
+    "margin_mode": "isolated",
+    "maintenance_margin_rate": 0.005,
+    "comment": "Stop loss is ALWAYS structure-based and must sit well inside the liquidation buffer. At 3x, liquidation is ~33% away, so a swing stop should be a fraction of that.",
+    "stop_loss_for_3x": {
+      "long": "Place stop just BELOW the most recent confirmed 4H swing low, or below the 50 EMA — whichever protects structure. Hard cap: adverse move <= 10% from entry.",
+      "short": "Place stop just ABOVE the most recent confirmed 4H swing high, or above the 50 EMA — whichever protects structure. Hard cap: adverse move <= 10% from entry.",
+      "max_adverse_move_pct": 10,
+      "position_sizing": "Size the position so the loss at the stop is <= 1% of portfolio (see risk_rules.max_risk_per_trade). Leverage does NOT change risk-per-trade; it only changes margin used."
+    }
+  },
+
+  "trade_plan_formulas": {
+    "cost_price": "entry = actual fill price reported by the chart/quote (quote_get last price)",
+    "liquidation_price": {
+      "note": "Approximate, isolated margin, fees/funding ignored. L = leverage, M = maintenance_margin_rate.",
+      "long": "liq = entry * (1 - 1/L + M)",
+      "short": "liq = entry * (1 + 1/L - M)",
+      "example_3x_long": "BTC entry 60000 -> liq ~= 60000 * (1 - 0.3333 + 0.005) ~= 40300",
+      "example_3x_short": "BTC entry 60000 -> liq ~= 60000 * (1 + 0.3333 - 0.005) ~= 79700"
+    },
+    "risk_per_unit": {
+      "long": "R = entry - stop_loss",
+      "short": "R = stop_loss - entry"
+    },
+    "targets": {
+      "long": {
+        "tp1": "entry + (min_rr_ratio * R)  [respects risk_rules.min_rr_ratio = 2]",
+        "tp2": "next major 4H/1D resistance / prior swing high",
+        "tp3": "1W structure target / range high"
+      },
+      "short": {
+        "tp1": "entry - (min_rr_ratio * R)  [respects risk_rules.min_rr_ratio = 2]",
+        "tp2": "next major 4H/1D support / prior swing low",
+        "tp3": "1W structure target / range low"
+      }
+    }
+  },
+
+  "analysis_workflow_per_symbol": [
+    "1. chart_set_symbol to the target coin, then chart_get_state to read symbol + visible indicators.",
+    "2. Check 1W, 1D, 4H. Read 50 EMA / 200 EMA, RSI(14), MACD, Volume via data_get_study_values.",
+    "3. Decide bias using bias_criteria -> LONG if bullish, SHORT if bearish, STAND ASIDE if neutral.",
+    "4. Read entry (cost) = quote_get last price.",
+    "5. Set stop_loss per leverage_rules.stop_loss_for_3x (structure-based, <=10% adverse).",
+    "6. Compute liquidation_price with default_leverage = 3.",
+    "7. Compute R, then TP1/TP2/TP3 per trade_plan_formulas.targets (TP1 must be >= 2R).",
+    "8. Reject the setup if it violates risk_rules (CPI/FOMC/weekend) or if RR < 2.",
+    "9. Report: coin, direction (long/short), leverage (3x), entry/cost, stop, liquidation, TP1/TP2/TP3."
+  ],
+
+  "report_template": {
+    "symbol": "<COIN>",
+    "direction": "long | short | stand_aside",
+    "leverage": 3,
+    "cost_entry": "<price>",
+    "stop_loss": "<price>",
+    "liquidation_price": "<price>",
+    "targets": { "tp1": "<price>", "tp2": "<price>", "tp3": "<price>" },
+    "rr_at_tp1": ">= 2",
+    "bias_reason": "<which bias_criteria matched>"
+  }
+}
