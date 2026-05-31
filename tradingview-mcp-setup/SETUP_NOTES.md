@@ -71,9 +71,11 @@ Desktop and the MCP reads their plotted output via `data_get_pine_lines` /
 ### Free liquidation-map alternative: `liquidation_heatmap.pine`
 
 Since trdr.io has no API, this repo ships `liquidation_heatmap.pine` — an **estimated**
-liquidation-levels indicator (no API needed). It marks where leveraged longs/shorts
-likely get liquidated, based on swing highs/lows + volume + leverage tiers (10/25/50/100x),
-and prints a "magnet" table with the nearest cluster above/below price.
+liquidation heatmap (no API needed). It draws **colored zones (boxes)** where leveraged
+longs/shorts likely get liquidated, based on swing highs/lows + volume + leverage tiers
+(10/25/50/100x). The zones are semi-transparent, so where many **overlap they stack and
+darken** — a real heatmap look. It also prints a "magnet" table with the nearest cluster
+above/below price.
 
 **Important:** it's an *estimate* from price/volume, not real exchange liquidation data
 (Pine can't access order books or open interest). It's a close visual proxy for
@@ -83,8 +85,11 @@ Load it:
 1. TradingView Desktop → Pine Editor → paste the file → "Add to chart".
 2. Or via the MCP once connected: `pine_set_source` → `pine_smart_compile`.
 
-The MCP reads it with `data_get_pine_lines` / `data_get_pine_labels` /
+The MCP reads it with `data_get_pine_boxes` (the zones) / `data_get_pine_labels` /
 `data_get_pine_tables` using `study_filter="Liquidation"`.
+
+Tuning: `Zone thickness (%)` sets how fat each zone is; raise `Max zones kept` for a
+denser heatmap; `Swing strength` controls how many swings generate zones.
 
 ## What `rules.json` does
 

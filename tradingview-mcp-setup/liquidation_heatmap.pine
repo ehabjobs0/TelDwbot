@@ -1,29 +1,29 @@
 //@version=5
 // =============================================================================
-//  Estimated Liquidation Heatmap / Levels  —  free TRDR/Coinglass alternative
+//  Estimated Liquidation Heatmap (ZONES)  —  free TRDR/Coinglass alternative
 // -----------------------------------------------------------------------------
 //  HOW IT WORKS (read this):
 //  Pine Script has NO access to real exchange order books or open interest, so a
 //  true liquidation feed is impossible. This script ESTIMATES where leveraged
-//  positions are likely to get liquidated:
-//    * A swing HIGH = where shorts likely opened  -> their liquidations sit ABOVE
-//    * A swing LOW  = where longs likely opened    -> their liquidations sit BELOW
-//  For each swing it projects liquidation prices for common leverage tiers and
-//  colors them by the volume at that swing (more volume = stronger cluster).
-//  It also prints a small table with the nearest cluster above/below price.
+//  positions are likely to get liquidated and draws them as COLORED ZONES (boxes):
+//    * A swing HIGH = where shorts likely opened  -> liquidation zones ABOVE (red)
+//    * A swing LOW  = where longs likely opened    -> liquidation zones BELOW (green)
+//  Zones are semi-transparent and volume-weighted, so where many zones OVERLAP the
+//  area gets darker/hotter — just like a real liquidation heatmap.
+//  A "magnet" table shows the nearest cluster above/below price + a bias hint.
 //
 //  Output is designed to be READ BY THE tradingview-mcp:
-//    * line.new   -> data_get_pine_lines  (liquidation price levels)
+//    * box.new    -> data_get_pine_boxes  (liquidation zones as {high, low})
 //    * label.new  -> data_get_pine_labels ("LIQ SHORT 50x 0.6543")
 //    * table.new  -> data_get_pine_tables (nearest magnet + bias hint)
 //  Use study_filter="Liquidation" when querying the MCP.
 // =============================================================================
-indicator("Liquidation Heatmap (Estimated)", shorttitle="LIQ Heatmap", overlay=true, max_lines_count=500, max_labels_count=500)
+indicator("Liquidation Heatmap (Estimated)", shorttitle="LIQ Heatmap", overlay=true, max_boxes_count=500, max_labels_count=500)
 
 // ---------- Inputs: swing detection ----------
-gP       = "Swing detection"
-pivLen   = input.int(15, "Swing strength (left/right bars)", minval=2, group=gP, tooltip="Bigger = only major swings, fewer/cleaner levels")
-volLen   = input.int(50, "Volume baseline length", minval=5, group=gP)
+gP     = "Swing detection"
+pivLen = input.int(15, "Swing strength (left/right bars)", minval=2, group=gP, tooltip="Bigger = only major swings, fewer/cleaner zones")
+volLen = input.int(50, "Volume baseline length", minval=5, group=gP)
 
 // ---------- Inputs: leverage tiers ----------
 gL   = "Leverage tiers"
@@ -35,9 +35,10 @@ mmr  = input.float(0.005, "Maintenance margin rate", step=0.001, group=gL, toolt
 
 // ---------- Inputs: display ----------
 gV         = "Display"
-maxLevels  = input.int(80, "Max levels kept on chart", minval=10, maxval=400, group=gV)
-extendBars = input.int(80, "Line length (bars right)", minval=5, group=gV)
-showLabels = input.bool(true, "Show price labels", group=gV)
+zonePct    = input.float(0.25, "Zone thickness (% of price)", minval=0.02, step=0.05, group=gV, tooltip="Half above / half below each liquidation price")
+maxZones   = input.int(120, "Max zones kept on chart", minval=10, maxval=480, group=gV)
+extendBars = input.int(80, "Zone length (bars right)", minval=5, group=gV)
+showLabels = input.bool(false, "Show price labels on zones", group=gV)
 volWeight  = input.bool(true, "Weight intensity by volume", group=gV)
 longCol    = input.color(color.lime, "Long-liq color (below price)", group=gV)
 shortCol   = input.color(color.red,  "Short-liq color (above price)", group=gV)
@@ -47,23 +48,26 @@ gT        = "Magnet table"
 showTable = input.bool(true, "Show nearest-cluster table", group=gT)
 
 // ---------- State arrays (parallel) ----------
-var line[]  lns    = array.new_line()
+var box[]   bxs    = array.new_box()
 var label[] lbs    = array.new_label()
 var float[] prices = array.new_float()
 var int[]   sides  = array.new_int()   // 1 = short-liq (above), -1 = long-liq (below)
 
-// ---------- Volume-based intensity ----------
+// ---------- Volume-based intensity (transparency) ----------
 vAvg   = ta.sma(volume, volLen)
 vAtPiv = volume[pivLen]
 relVol = vAvg > 0 ? vAtPiv / vAvg : 1.0
-transp = volWeight ? int(math.max(0, math.min(85, 85 - relVol * 28))) : 25
-lw     = volWeight ? int(math.max(1, math.min(4, math.round(relVol)))) : 1
+// Higher volume -> lower transparency (hotter). Kept high overall so OVERLAPS stack.
+transp = volWeight ? int(math.max(55, math.min(92, 92 - relVol * 15))) : 80
 
-// ---------- Helper: add one liquidation level ----------
-addLevel(float price, int side, color baseCol, string sideTxt, int lev) =>
-    col = color.new(baseCol, transp)
-    ln  = line.new(bar_index - pivLen, price, bar_index + extendBars, price, color=col, width=lw)
-    array.push(lns, ln)
+// ---------- Helper: add one liquidation zone ----------
+addZone(float price, int side, color baseCol, string sideTxt, int lev) =>
+    half = price * (zonePct / 100.0) / 2.0
+    top  = price + half
+    bot  = price - half
+    col  = color.new(baseCol, transp)
+    bx   = box.new(bar_index - pivLen, top, bar_index + extendBars, bot, border_color=color.new(baseCol, math.min(99, transp + 5)), border_width=1, bgcolor=col)
+    array.push(bxs, bx)
     array.push(prices, price)
     array.push(sides, side)
     label lb = na
@@ -72,28 +76,28 @@ addLevel(float price, int side, color baseCol, string sideTxt, int lev) =>
         lb := label.new(bar_index + extendBars, price, txt, style=label.style_label_left, color=color.new(baseCol, 75), textcolor=color.white, size=size.tiny)
     array.push(lbs, lb)
     // trim oldest to respect the cap
-    if array.size(lns) > maxLevels
-        line.delete(array.shift(lns))
+    if array.size(bxs) > maxZones
+        box.delete(array.shift(bxs))
         label.delete(array.shift(lbs))
         array.shift(prices)
         array.shift(sides)
 
 // ---------- Detect swings ----------
-ph = ta.pivothigh(high, pivLen, pivLen)
-pl = ta.pivotlow(low,  pivLen, pivLen)
+ph   = ta.pivothigh(high, pivLen, pivLen)
+pl   = ta.pivotlow(low,  pivLen, pivLen)
 levs = array.from(lev1, lev2, lev3, lev4)
 
-// Swing HIGH -> shorts opened ~ here -> liquidations ABOVE
+// Swing HIGH -> shorts opened ~ here -> liquidation zones ABOVE
 if not na(ph)
     for L in levs
         liq = ph * (1 + 1.0 / L - mmr)
-        addLevel(liq, 1, shortCol, "SHORT", L)
+        addZone(liq, 1, shortCol, "SHORT", L)
 
-// Swing LOW -> longs opened ~ here -> liquidations BELOW
+// Swing LOW -> longs opened ~ here -> liquidation zones BELOW
 if not na(pl)
     for L in levs
         liq = pl * (1 - 1.0 / L + mmr)
-        addLevel(liq, -1, longCol, "LONG", L)
+        addZone(liq, -1, longCol, "LONG", L)
 
 // ---------- Nearest-cluster magnet table ----------
 var table t = na
@@ -123,7 +127,7 @@ if showTable and barstate.islast
     table.cell(t, 1, 1, na(nAbove) ? "-" : str.tostring(nAbove, format.mintick), text_color=color.red, text_size=size.small)
     table.cell(t, 0, 2, "Nearest BELOW", text_color=color.white, text_size=size.small)
     table.cell(t, 1, 2, na(nBelow) ? "-" : str.tostring(nBelow, format.mintick), text_color=color.lime, text_size=size.small)
-    table.cell(t, 0, 3, "Levels above/below", text_color=color.white, text_size=size.small)
+    table.cell(t, 0, 3, "Zones above/below", text_color=color.white, text_size=size.small)
     table.cell(t, 1, 3, str.tostring(cAbove) + " / " + str.tostring(cBelow), text_color=color.white, text_size=size.small)
     table.cell(t, 0, 4, "Bias hint", text_color=color.white, text_size=size.small)
     table.cell(t, 1, 4, hint, text_color=color.yellow, text_size=size.small)

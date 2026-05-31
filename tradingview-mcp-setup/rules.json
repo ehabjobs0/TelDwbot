@@ -30,7 +30,7 @@
     "what_i_want": "Read the liquidation heatmap / order-book heatmap to help decide long vs short.",
     "trdr_io_status": "trdr.io has NO public developer API (api subdomain does not exist, site is bot-blocked 403, docs mention no API/key/webhook). It cannot be queried programmatically.",
     "the_workaround": "TRDR is 'powered by TradingView' — its Liquidations and 'Order Book Top Levels' heatmap are TradingView indicators. Add them to the chart on TradingView Desktop, then the MCP reads their plotted output.",
-    "free_alternative_script": "tradingview-mcp-setup/liquidation_heatmap.pine — an estimated liquidation-levels indicator (swing-based, volume-weighted, leverage tiers 10/25/50/100x). Load it on the chart; the MCP reads its lines/labels/table. study_filter=\"Liquidation\". NOTE: estimate only, not real exchange liquidation data.",
+    "free_alternative_script": "tradingview-mcp-setup/liquidation_heatmap.pine — an estimated liquidation-ZONES heatmap (swing-based, volume-weighted, leverage tiers 10/25/50/100x). Draws semi-transparent boxes that stack/darken where zones overlap. Load it on the chart; the MCP reads it via data_get_pine_boxes (zones), data_get_pine_labels, data_get_pine_tables. study_filter=\"Liquidation\". NOTE: estimate only, not real exchange liquidation data.",
     "how_mcp_reads_it": [
       "data_get_pine_lines with study_filter for the liquidation indicator -> horizontal liquidation price levels",
       "data_get_pine_boxes -> liquidation zones as {high, low}",
