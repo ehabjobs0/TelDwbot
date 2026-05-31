@@ -21,7 +21,7 @@
 //  Read by the tradingview-mcp via: data_get_pine_boxes (zones {high,low}),
 //  data_get_pine_labels (xN tags), data_get_pine_tables (magnet). study_filter="Liquidation".
 // =============================================================================
-indicator("Liquidation Heatmap (Estimated)", shorttitle="LIQ Heatmap", overlay=true, max_boxes_count=500, max_labels_count=500)
+indicator("Liquidation Heatmap (Estimated)", shorttitle="LIQ Heatmap", overlay=true, max_boxes_count=500, max_labels_count=500, max_lines_count=20)
 
 // ---------- Inputs: swing detection ----------
 gP     = "Swing detection"
@@ -49,6 +49,10 @@ shortCol   = input.color(color.red,  "Short-liq color (above price)", group=gV)
 // ---------- Inputs: magnet table ----------
 gT        = "Magnet table"
 showTable = input.bool(true, "Show nearest-cluster table", group=gT)
+
+// ---------- Inputs: nearest-wall pointer ----------
+gW       = "Nearest-wall pointer"
+showWall = input.bool(true, "Show dotted line to nearest wall", group=gW, tooltip="Dotted line from current price to the nearest liquidity wall above and below, with distance %")
 
 // ---------- Inputs: alerts ----------
 gA           = "Alerts"
@@ -195,6 +199,26 @@ if showTable and barstate.islast
     table.cell(t, 1, 3, str.tostring(sumAbove) + " / " + str.tostring(sumBelow), text_color=color.white, text_size=size.small)
     table.cell(t, 0, 4, "Bias hint", text_color=color.white, text_size=size.small)
     table.cell(t, 1, 4, hint, text_color=color.yellow, text_size=size.small)
+
+// ---------- Dotted pointer to nearest wall ----------
+var line  lnA = na
+var line  lnB = na
+var label laA = na
+var label laB = na
+if showWall and barstate.islast
+    line.delete(lnA)
+    line.delete(lnB)
+    label.delete(laA)
+    label.delete(laB)
+    int xPos = bar_index + 3
+    if not na(nAbove)
+        float dA = (nAbove - close) / close * 100.0
+        lnA := line.new(xPos, close, xPos, nAbove, xloc=xloc.bar_index, style=line.style_dotted, color=shortCol, width=1)
+        laA := label.new(xPos, nAbove, str.tostring(nAbove, format.mintick) + " x" + str.tostring(nAboveCnt) + "  +" + str.tostring(dA, "#.##") + "%", style=label.style_label_down, color=color.new(shortCol, 25), textcolor=color.white, size=size.small)
+    if not na(nBelow)
+        float dB = (close - nBelow) / close * 100.0
+        lnB := line.new(xPos, close, xPos, nBelow, xloc=xloc.bar_index, style=line.style_dotted, color=longCol, width=1)
+        laB := label.new(xPos, nBelow, str.tostring(nBelow, format.mintick) + " x" + str.tostring(nBelowCnt) + "  -" + str.tostring(dB, "#.##") + "%", style=label.style_label_up, color=color.new(longCol, 25), textcolor=color.white, size=size.small)
 
 // ---------- Alerts ----------
 if alertsOn and barstate.isconfirmed
