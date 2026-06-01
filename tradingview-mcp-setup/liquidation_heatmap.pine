@@ -47,8 +47,11 @@ longCol    = input.color(color.lime, "Long-liq color (below price)", group=gV)
 shortCol   = input.color(color.red,  "Short-liq color (above price)", group=gV)
 
 // ---------- Inputs: magnet table ----------
-gT        = "Magnet table"
-showTable = input.bool(true, "Show nearest-cluster table", group=gT)
+gT         = "Magnet table"
+showTable  = input.bool(true, "Show nearest-cluster table", group=gT)
+tablePosIn = input.string("Top Right", "Table position", options=["Top Right", "Top Left", "Bottom Right", "Bottom Left", "Middle Right"], group=gT)
+tableSzIn  = input.string("Tiny", "Table text size", options=["Tiny", "Small", "Normal"], group=gT)
+hdrCol     = input.color(color.new(color.blue, 0), "Table header color", group=gT)
 
 // ---------- Inputs: nearest-wall pointer ----------
 gW       = "Nearest-wall pointer"
@@ -185,20 +188,22 @@ if nz > 0
 
 // ---------- Magnet table ----------
 var table t = na
+tPos  = tablePosIn == "Top Left" ? position.top_left : tablePosIn == "Bottom Right" ? position.bottom_right : tablePosIn == "Bottom Left" ? position.bottom_left : tablePosIn == "Middle Right" ? position.middle_right : position.top_right
+tSize = tableSzIn == "Small" ? size.small : tableSzIn == "Normal" ? size.normal : size.tiny
 if showTable and barstate.islast
     if na(t)
-        t := table.new(position.top_right, 2, 5, border_width=1, frame_color=color.gray, frame_width=1)
-    string hint = sumBelow > sumAbove ? "Heavier BELOW: downside liquidity (long-squeeze / sweep low)" : sumAbove > sumBelow ? "Heavier ABOVE: upside liquidity (short-squeeze / sweep high)" : "Balanced"
-    table.cell(t, 0, 0, "LIQ MAGNET", text_color=color.white, bgcolor=color.new(color.blue, 0), text_size=size.small)
-    table.cell(t, 1, 0, "", bgcolor=color.new(color.blue, 0))
-    table.cell(t, 0, 1, "Nearest ABOVE", text_color=color.white, text_size=size.small)
-    table.cell(t, 1, 1, na(nAbove) ? "-" : str.tostring(nAbove, format.mintick) + "  x" + str.tostring(nAboveCnt), text_color=color.red, text_size=size.small)
-    table.cell(t, 0, 2, "Nearest BELOW", text_color=color.white, text_size=size.small)
-    table.cell(t, 1, 2, na(nBelow) ? "-" : str.tostring(nBelow, format.mintick) + "  x" + str.tostring(nBelowCnt), text_color=color.lime, text_size=size.small)
-    table.cell(t, 0, 3, "Liq weight above/below", text_color=color.white, text_size=size.small)
-    table.cell(t, 1, 3, str.tostring(sumAbove) + " / " + str.tostring(sumBelow), text_color=color.white, text_size=size.small)
-    table.cell(t, 0, 4, "Bias hint", text_color=color.white, text_size=size.small)
-    table.cell(t, 1, 4, hint, text_color=color.yellow, text_size=size.small)
+        t := table.new(tPos, 2, 5, border_width=1, frame_color=color.gray, frame_width=1)
+    string hint = sumBelow > sumAbove ? "DOWN sweep risk" : sumAbove > sumBelow ? "UP sweep risk" : "Balanced"
+    table.cell(t, 0, 0, "LIQ MAGNET", text_color=color.white, bgcolor=hdrCol, text_size=tSize)
+    table.cell(t, 1, 0, "", bgcolor=hdrCol)
+    table.cell(t, 0, 1, "Above", text_color=color.white, text_size=tSize)
+    table.cell(t, 1, 1, na(nAbove) ? "-" : str.tostring(nAbove, format.mintick) + " x" + str.tostring(nAboveCnt), text_color=color.red, text_size=tSize)
+    table.cell(t, 0, 2, "Below", text_color=color.white, text_size=tSize)
+    table.cell(t, 1, 2, na(nBelow) ? "-" : str.tostring(nBelow, format.mintick) + " x" + str.tostring(nBelowCnt), text_color=color.lime, text_size=tSize)
+    table.cell(t, 0, 3, "Wt a/b", text_color=color.white, text_size=tSize)
+    table.cell(t, 1, 3, str.tostring(sumAbove) + "/" + str.tostring(sumBelow), text_color=color.white, text_size=tSize)
+    table.cell(t, 0, 4, "Bias", text_color=color.white, text_size=tSize)
+    table.cell(t, 1, 4, hint, text_color=color.yellow, text_size=tSize)
 
 // ---------- Dotted pointer to nearest wall ----------
 var line  lnA = na
